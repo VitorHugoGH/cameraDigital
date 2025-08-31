@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>LegisTech - Início</title>
+    <style>
+        body { font-family: sans-serif; margin: 2em; background-color: #f4f4f4; }
+        .container { max-width: 900px; margin: auto; background: white; padding: 2em; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1, h2 { color: #333; }
+        .history-table { width: 100%; border-collapse: collapse; margin-top: 2em; }
+        .history-table th, .history-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>LegisTech - Gerador de Pareceres</h1>
+        <h2>1ª Etapa: Envio do Documento</h2>
+        <p>Selecione o arquivo PDF do Projeto de Lei para iniciar.</p>
+        
+        <form action="/upload" method="post" enctype="multipart/form-data">
+            <label for="file">Arquivo PDF:</label>
+            <input type="file" name="file" id="file" required>
+            <input type="submit" value="Enviar e Extrair Dados">
+        </form>
+
+        <h2>Histórico de Documentos Gerados</h2>
+        <table class="history-table">
+            <thead>
+                <tr>
+                    <th>PDF Original</th>
+                    <th>Nº do Projeto</th>
+                    <th>Data de Geração</th>
+                    <th>Download do Parecer</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in historico %}
+                <tr>
+                    <td>{{ item.pdf_name }}</td>
+                    <td>{{ item.numero_projeto }}</td>
+                    <td>{{ item.data_geracao }}</td>
+                    <td><a href="{{ url_for('download', filename=item.docx_name) }}">{{ item.docx_name }}</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>

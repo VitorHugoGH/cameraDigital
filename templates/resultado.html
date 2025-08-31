@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Pareceres Gerados</title>
+    <style>
+        body { font-family: sans-serif; margin: 2em; text-align: center; }
+        .download-list { list-style-type: none; padding: 0; }
+        .download-list li { margin: 1em; }
+        .download-link { font-size: 1.2em; padding: 10px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Pareceres Gerados com Sucesso!</h1>
+    <p>Seus documentos estão prontos para download.</p>
+    <ul class="download-list">
+        {% for arquivo in arquivos %}
+        <li>
+            <a href="{{ url_for('download', filename=arquivo) }}" class="download-link">Baixar {{ arquivo }}</a>
+        </li>
+        {% endfor %}
+    </ul>
+    <br>
+    <p><a href="{{ url_for('index') }}">Gerar novos pareceres</a></p>
+</body>
+</html>
