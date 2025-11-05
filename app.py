@@ -32,53 +32,115 @@ def get_db():
 
 # --- LÓGICA DE SUBSTITUIÇÃO DE TEXTO (para manter a formatação) ---
 def replace_text_in_paragraph(paragraph, key, value):
-    # Esta função ajuda a manter a formatação da fonte ao substituir
-    if key in paragraph.text:
-        inline = paragraph.runs
-        for i in range(len(inline)):
-            if key in inline[i].text:
-                text = inline[i].text.replace(key, value)
-                inline[i].text = text
+    """
+    Substitui um placeholder em um parágrafo, mantendo a formatação.
+    Esta versão robusta lida com placeholders quebrados em múltiplos 'runs'.
+    """
+    if key not in paragraph.text:
+        return  # Chave não encontrada, não faz nada
+
+    # Combina os 'runs' para encontrar a chave
+    full_text = "".join(run.text for run in paragraph.runs)
+    if key not in full_text:
+        return # Chave não encontrada no texto combinado
+
+    # Encontra a chave e faz a substituição
+    run_texts = [run.text for run in paragraph.runs]
+    found = False
+    for i in range(len(run_texts)):
+        if key in run_texts[i]:
+            # Caso simples: chave inteira dentro de um run
+            run_texts[i] = run_texts[i].replace(key, value)
+            found = True
+            break
+        
+        # Caso complexo: chave quebrada entre runs
+        combined_text = "".join(run_texts[i:])
+        if combined_text.startswith(key):
+            # A chave começa neste run e se espalha
+            temp_text = ""
+            j = i
+            while len(temp_text) < len(key) and j < len(run_texts):
+                temp_text += run_texts[j]
+                j += 1
+            
+            # Substitui no primeiro run e apaga os seguintes
+            run_texts[i] = temp_text.replace(key, value, 1) # Substitui
+            for k in range(i + 1, j):
+                run_texts[k] = "" # Apaga o texto dos runs subsequentes
+            found = True
+            break
+
+    # Se a chave foi encontrada, atualiza os runs
+    if found:
+        for i in range(len(paragraph.runs)):
+            paragraph.runs[i].text = run_texts[i]
 
 # --- LÓGICA PRINCIPAL ---
 def processar_pdf(pdf_path):
     try:
-        # --- MÉTODO DE EXTRAÇÃO APRIMORADO ---
         texto_extraido = ""
         with fitz.open(pdf_path) as doc:
             for page in doc:
-                text_blocks = page.get_text("blocks")
-                for block in text_blocks:
-                    texto_extraido += block[4] + " "
+                texto_extraido += page.get_text() + " "
 
         texto_limpo = re.sub(r'\s+', ' ', texto_extraido.replace('\n', ' '))
 
-        # ---- LINHA DE DIAGNÓSTICO ADICIONADA ----
         print("--- TEXTO LIMPO PARA ANÁLISE REGEX ---")
         print(texto_limpo)
         print("-----------------------------------------")
-        # -----------------------------------------
 
         dados_do_projeto = {}
 
-        # --- Regex Refinadas (v3) ---
-        padrao_tipo = r"(PROJETO DE LEI ORDINÁRIA|PROJETO DE LEI COMPLEMENTAR|PROJETO DE RESOLUÇÃO|PROJETO DE DECRETO LEGISLATIVO|PROPOSTA DE EMENDA À LEI ORGÂNICA MUNICIPAL)"
-        padrao_numero = r"(?:N[º'q9]|n[oº9]|ne)\s*(\d+\s*[/]\s*\d{4})"
-        padrao_data = r"(\d{1,2}\s+de\s+\w+\s+de\s+\d{4})"
-        padrao_ementa = r"\"\s*(Abre.*?Anual)\s*\""
+        # --- Regex Refinadas (v5) - CORRIGIDAS ---
+        
+        # Padrão ÚNICO para TIPO e NÚMERO.
+        # Procura "PROJETO DE LEI..." e DEPOIS "N... 45"
+        padrao_tipo_e_numero = r"(PROJETO DE LEI (ORDIN[ÁA]RIA|COMPLEMENTAR)|PROJETO DE RESOLUÇÃO|PROJETO DE DECRETO LEGISLATIVO|PROPOSTA DE EMENDA [ÁA] LEI ORG[ÂA]NICA MUNICIPAL)\s*(?:N[º'q9]|n[oº9]|ne)\s*(\d+)"
+        
+        padrao_data = r"(\d{1,2}\s+de\s+\w+\s+(?:de|oe)\s+(\d{4}))"
+        padrao_ementa = r"\"\s*(Abre.*?Anual.*?)\s*\""
 
-        if (match := re.search(padrao_tipo, texto_limpo, re.IGNORECASE)):
+        print("Iniciando busca por Regex...")
+
+        # Variáveis para combinar o número
+        match_numero_val = None
+        match_ano_val = None
+
+        if (match := re.search(padrao_tipo_e_numero, texto_limpo, re.IGNORECASE)):
             dados_do_projeto["TIPO_PROJETO"] = match.group(1).upper().strip()
+            match_numero_val = match.group(3) # Grupo 3 é o (\d+)
+            print(f"SUCESSO (Regex): TIPO_PROJETO={dados_do_projeto['TIPO_PROJETO']}")
+            print(f"SUCESSO (Regex): NÚMERO={match_numero_val}")
+        else:
+            print("FALHA (Regex): Padrão combinado TIPO/NÚMERO não encontrado.")
+            
+        if (match_data := re.search(padrao_data, texto_limpo, re.IGNORECASE)):
+            dados_do_projeto["DATA_PROJETO"] = match_data.group(1).strip()
+            match_ano_val = match_data.group(2) # Ex: "2025"
+            print(f"SUCESSO (Regex): DATA_PROJETO={dados_do_projeto['DATA_PROJETO']}")
+            print(f"SUCESSO (Regex): ANO={match_ano_val}")
+        else:
+            print("FALHA (Regex): DATA_PROJETO (ex: ...OE 2025) não encontrada.")
 
-        if (match := re.search(padrao_numero, texto_limpo, re.IGNORECASE)):
-            dados_do_projeto["NUMERO_PROJETO"] = re.sub(r'\s', '', match.group(1))
+        # Combina número e ano no formato que o sistema espera
+        if match_numero_val and match_ano_val:
+            dados_do_projeto["NUMERO_PROJETO"] = f"{match_numero_val.zfill(3)}/{match_ano_val}" # Formata para "045/2025"
+            print(f"SUCESSO (Combinado): NUMERO_PROJETO={dados_do_projeto['NUMERO_PROJETO']}")
+        else:
+            print("FALHA (Combinado): Não foi possível criar o NUMERO_PROJETO.")
 
-        if (match := re.search(padrao_data, texto_limpo)):
-            dados_do_projeto["DATA_PROJETO"] = match.group(1).strip()
+        if (match := re.search(padrao_ementa, texto_limpo, re.IGNORECASE | re.DOTALL)):
+            ementa_limpa = match.group(1).strip().replace("Í", "i").replace("çá", "çã").replace("ôe", "õe")
+            dados_do_projeto["EMENTA"] = f'"{ementa_limpa}"'
+            print(f"SUCESSO (Regex): EMENTA={dados_do_projeto['EMENTA'][:50]}...")
+        else:
+            print("FALHA (Regex): EMENTA (ex: 'Abre...Anual') não encontrada.")
 
-        if (match := re.search(padrao_ementa, texto_limpo, re.IGNORECASE)):
-             dados_do_projeto["EMENTA"] = f'"{match.group(1).strip()}"'
-
+        print("--- Dados Extraídos ---")
+        print(dados_do_projeto)
+        print("-----------------------")
+        
         return dados_do_projeto
 
     except Exception as e:
@@ -92,14 +154,27 @@ def gerar_docx_final(form_data, pdf_filename):
 
     for sigla in comissoes_selecionadas:
         template_path = os.path.join(app.config['TEMPLATE_FOLDER'], f"template_{sigla.lower()}.docx")
-        if not os.path.exists(template_path): continue
+        
+        if not os.path.exists(template_path): 
+            print(f"AVISO: Template não encontrado para {sigla} em {template_path}. Pulando...")
+            continue # Pula para a próxima comissão em vez de quebrar
 
         doc = docx.Document(template_path)
         comissao = db.execute('SELECT * FROM comissoes WHERE sigla = ?', (sigla,)).fetchone()
         membros = db.execute('SELECT * FROM membros WHERE comissao_id = ?', (comissao['id'],)).fetchall()
-        relator = db.execute('SELECT * FROM membros WHERE id = ?', (form_data.get(f'relator_{sigla}'),)).fetchone()
-        signatarios = [m for m in membros if m['id'] != relator['id']]
+        
+        relator_id = form_data.get(f'relator_{sigla}')
+        if not relator_id:
+            print(f"AVISO: Relator não selecionado para {sigla}. Pulando...")
+            continue # Pula para a próxima comissão
 
+        relator = db.execute('SELECT * FROM membros WHERE id = ?', (relator_id,)).fetchone()
+        
+        if not relator:
+            print(f"AVISO: Relator ID {relator_id} não encontrado no DB para {sigla}. Pulando...")
+            continue # Pula para a próxima comissão
+
+        signatarios = [m for m in membros if m['id'] != relator['id']]
         data_parecer = datetime.strptime(form_data.get('data_parecer'), '%Y-%m-%d')
 
         contexto = {
@@ -116,6 +191,8 @@ def gerar_docx_final(form_data, pdf_filename):
             "{{NOME_DA_COMISSAO}}": comissao['nome'].upper(),
             "{{NOME_RELATOR}}": relator['nome'].upper(),
             "{{CARGO_RELATOR}}": relator['cargo'],
+            
+            # Lógica segura para signatários, mesmo que só exista 1 ou 2 membros
             "{{NOME_SIGNATARIO_1}}": signatarios[0]['nome'].upper() if len(signatarios) > 0 else "",
             "{{CARGO_SIGNATARIO_1}}": signatarios[0]['cargo'] if len(signatarios) > 0 else "",
             "{{NOME_SIGNATARIO_2}}": signatarios[1]['nome'].upper() if len(signatarios) > 1 else "",
@@ -124,18 +201,27 @@ def gerar_docx_final(form_data, pdf_filename):
 
         for p in doc.paragraphs:
             for key, value in contexto.items():
-                replace_text_in_paragraph(p, key, value)
+                replace_text_in_paragraph(p, key, str(value)) # Usa a nova função robusta
         
+        for table in doc.tables:
+             for row in table.rows:
+                for cell in row.cells:
+                    for p in cell.paragraphs:
+                        for key, value in contexto.items():
+                            replace_text_in_paragraph(p, key, str(value))
+
         nome_saida = f"Parecer_{sigla}_{form_data.get('numero_projeto', '00-0000').replace('/', '-')}.docx"
         caminho_saida = os.path.join(app.config['GENERATED_FOLDER'], nome_saida)
         doc.save(caminho_saida)
         arquivos_gerados.append(nome_saida)
+        print(f"SUCESSO: Arquivo '{nome_saida}' gerado.")
 
         # Salva no histórico
         db.execute('INSERT INTO pareceres (pdf_name, docx_name, numero_projeto, data_geracao) VALUES (?, ?, ?, ?)',
                    (pdf_filename, nome_saida, form_data.get('numero_projeto'), datetime.now().strftime("%d/%m/%Y %H:%M:%S")))
         db.commit()
-
+    
+    db.close() # Fecha a conexão com o DB
     return arquivos_gerados
 
 # --- ROTAS ---
@@ -166,9 +252,32 @@ def upload():
 
 @app.route('/gerar', methods=['POST'])
 def gerar():
+    # --- NOVO BLOCO DE VERIFICAÇÃO ---
+    # Verifica PRIMEIRO se alguma comissão foi selecionada
+    comissoes_selecionadas = request.form.getlist('comissao_selecionada')
+    if not comissoes_selecionadas:
+        flash('Erro: Nenhuma comissão foi selecionada. Tente novamente.')
+        # Redirecionar de volta para a página inicial é o mais simples
+        return redirect(url_for('index'))
+    # --- FIM DO NOVO BLOCO ---
+
     pdf_filename = request.form.get('pdf_filename')
-    arquivos_gerados = gerar_docx_final(request.form, pdf_filename)
-    return render_template('resultado.html', arquivos=arquivos_gerados)
+    
+    try:
+        arquivos_gerados = gerar_docx_final(request.form, pdf_filename)
+        
+        # Segunda verificação: Se os arquivos gerados estiverem vazios (ex: erro de template)
+        if not arquivos_gerados:
+            flash('Erro ao gerar os arquivos. Verifique os templates e dados do formulário.')
+            return redirect(url_for('index'))
+            
+        return render_template('resultado.html', arquivos=arquivos_gerados)
+
+    except Exception as e:
+        # Captura erros na geração (ex: template .docx não encontrado)
+        print(f"ERRO CRÍTICO EM /gerar: {e}")
+        flash(f'Erro interno ao gerar documentos: {e}')
+        return redirect(url_for('index'))
 
 # Rotas de download e init-db continuam as mesmas da versão anterior
 @app.route('/download/<filename>')
@@ -177,5 +286,92 @@ def download(filename):
 
 @app.cli.command('init-db')
 def init_db_command():
-    # ... (cole aqui a função init-db completa da mensagem anterior, com as 4 comissões)
-    pass # A função completa está na mensagem anterior
+    """Limpa os dados existentes e cria novas tabelas com dados padrão."""
+    db = get_db()
+    cursor = db.cursor()
+    
+    # Limpar tabelas existentes
+    cursor.execute("DROP TABLE IF EXISTS pareceres;")
+    cursor.execute("DROP TABLE IF EXISTS membros;")
+    cursor.execute("DROP TABLE IF EXISTS comissoes;")
+    print("Tabelas antigas (se existiam) removidas.")
+
+    # Criar tabelas
+    cursor.execute('''
+    CREATE TABLE comissoes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT NOT NULL,
+        sigla TEXT NOT NULL UNIQUE
+    );
+    ''')
+    cursor.execute('''
+    CREATE TABLE membros (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        comissao_id INTEGER NOT NULL,
+        nome TEXT NOT NULL,
+        cargo TEXT NOT NULL,
+        FOREIGN KEY (comissao_id) REFERENCES comissoes (id)
+    );
+    ''')
+    cursor.execute('''
+    CREATE TABLE pareceres (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        pdf_name TEXT NOT NULL,
+        docx_name TEXT NOT NULL,
+        numero_projeto TEXT,
+        data_geracao TEXT NOT NULL
+    );
+    ''')
+    print("Novas tabelas (comissoes, membros, pareceres) criadas.")
+
+    # Inserir Comissões Padrão (COM OS NOMES CORRIGIDOS)
+    comissoes = [
+        ('Comissão de Justiça e Redação', 'CJR'),
+        ('Comissão de Finanças e Orçamento', 'CFO'),
+        ('Comissão de Obras, Serviços Públicos e Atividades Privadas', 'COSPAP'),
+        ('Comissão de Educação, Saúde e Assistência Social', 'CESAS')
+    ]
+    cursor.executemany('INSERT INTO comissoes (nome, sigla) VALUES (?, ?)', comissoes)
+    print("Comissões padrão (corrigidas) inseridas.")
+    db.commit()
+
+    # Buscar IDs das comissões
+    try:
+        cjr_id = cursor.execute("SELECT id FROM comissoes WHERE sigla = 'CJR'").fetchone()['id']
+        cfo_id = cursor.execute("SELECT id FROM comissoes WHERE sigla = 'CFO'").fetchone()['id']
+        cospap_id = cursor.execute("SELECT id FROM comissoes WHERE sigla = 'COSPAP'").fetchone()['id']
+        cesas_id = cursor.execute("SELECT id FROM comissoes WHERE sigla = 'CESAS'").fetchone()['id']
+    except TypeError:
+        print("ERRO: Falha ao buscar IDs das comissões. Verifique as siglas.")
+        db.close()
+        return
+
+    # Inserir Membros Padrão (COM OS CARGOS CORRIGIDOS)
+    # !!! ALTERE ESTES NOMES PARA OS VEREADORES REAIS !!!
+    membros = [
+        # CJR
+        (cjr_id, 'Vereador A (CJR)', 'Presidente'),
+        (cjr_id, 'Vereador B (CJR)', 'Vice-Presidente'),
+        (cjr_id, 'Vereador C (CJR)', 'Membro'),
+        
+        # CFO
+        (cfo_id, 'Vereador D (CFO)', 'Presidente'),
+        (cfo_id, 'Vereador E (CFO)', 'Vice-Presidente'),
+        (cfo_id, 'Vereador F (CFO)', 'Membro'),
+        
+        # COSPAP
+        (cospap_id, 'Vereador G (COSPAP)', 'Presidente'),
+        (cospap_id, 'Vereador H (COSPAP)', 'Vice-Presidente'),
+        (cospap_id, 'Vereador I (COSPAP)', 'Membro'),
+        
+        # CESAS
+        (cesas_id, 'Vereador J (CESAS)', 'Presidente'),
+        (cesas_id, 'Vereador K (CESAS)', 'Vice-Presidente'),
+        (cesas_id, 'Vereador L (CESAS)', 'Membro')
+    ]
+    cursor.executemany('INSERT INTO membros (comissao_id, nome, cargo) VALUES (?, ?, ?)', membros)
+    print("Membros padrão (corrigidos) inseridos.")
+    
+    db.commit()
+    db.close()
+    print("Banco de dados inicializado com sucesso.")
