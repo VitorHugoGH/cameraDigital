@@ -7,6 +7,8 @@ import docx
 import sqlite3
 from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory, flash
+import locale
+locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
 
 # --- CONFIGURAÇÃO ---
 app = Flask(__name__)
@@ -37,41 +39,34 @@ def replace_text_in_paragraph(paragraph, key, value):
     Esta versão robusta lida com placeholders quebrados em múltiplos 'runs'.
     """
     if key not in paragraph.text:
-        return  # Chave não encontrada, não faz nada
+        return
 
-    # Combina os 'runs' para encontrar a chave
     full_text = "".join(run.text for run in paragraph.runs)
     if key not in full_text:
-        return # Chave não encontrada no texto combinado
+        return
 
-    # Encontra a chave e faz a substituição
     run_texts = [run.text for run in paragraph.runs]
     found = False
     for i in range(len(run_texts)):
         if key in run_texts[i]:
-            # Caso simples: chave inteira dentro de um run
             run_texts[i] = run_texts[i].replace(key, value)
             found = True
             break
         
-        # Caso complexo: chave quebrada entre runs
         combined_text = "".join(run_texts[i:])
         if combined_text.startswith(key):
-            # A chave começa neste run e se espalha
             temp_text = ""
             j = i
             while len(temp_text) < len(key) and j < len(run_texts):
                 temp_text += run_texts[j]
                 j += 1
             
-            # Substitui no primeiro run e apaga os seguintes
-            run_texts[i] = temp_text.replace(key, value, 1) # Substitui
+            run_texts[i] = temp_text.replace(key, value, 1)
             for k in range(i + 1, j):
-                run_texts[k] = "" # Apaga o texto dos runs subsequentes
+                run_texts[k] = ""
             found = True
             break
 
-    # Se a chave foi encontrada, atualiza os runs
     if found:
         for i in range(len(paragraph.runs)):
             paragraph.runs[i].text = run_texts[i]

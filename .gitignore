@@ -1,0 +1,15 @@
+# Ambiente virtual Python
+.venv/
+
+# Arquivos de cache do Python
+__pycache__/
+*.pyc
+
+# Arquivos de dados da aplicação
+# (O Git não deve versionar o banco de dados nem os arquivos de upload/geração)
+database.db
+uploads/
+generated/
+
+# Arquivos de configuração do VSCode
+.vscode/
