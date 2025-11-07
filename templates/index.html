@@ -36,7 +36,15 @@
   </head>
   <body>
     <div class="container">
-      <h1>LegisTech - Gerador de Pareceres (Versão Teste)</h1>
+      <h1>LegisTech - Gerador de Pareceres</h1>
+
+      <a
+        href="{{ url_for('gerenciar') }}"
+        style="font-size: 1.1em; margin-bottom: 20px; display: inline-block"
+      >
+        Gerenciar Membros e Comissões
+      </a>
+
       <h2>1ª Etapa: Envio do Documento</h2>
       <p>Selecione o arquivo PDF do Projeto de Lei para iniciar.</p>
 
@@ -63,9 +71,9 @@
             <td>{{ item.numero_projeto }}</td>
             <td>{{ item.data_geracao }}</td>
             <td>
-              <a href="{{ url_for('download', filename=item.docx_name) }}"
-                >{{ item.docx_name }}</a
-              >
+              <a href="{{ url_for('download', filename=item.docx_name) }}">
+                {{ item.docx_name }}
+              </a>
             </td>
           </tr>
           {% endfor %}

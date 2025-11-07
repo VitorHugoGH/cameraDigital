@@ -175,7 +175,7 @@ def gerar_docx_final(form_data, pdf_filename):
         contexto = {
             "{{TIPO_PROJETO}}": form_data.get("tipo_projeto"),
             "{{NUMERO_PROJETO}}": form_data.get("numero_projeto"),
-            "{{DATA_PROJETO}}": form_data.get("data_projeto"),
+            "{{DATA_PROJETO}}": form_data.get("data_projeto", "").upper(),
             "{{EMENTA}}": form_data.get("ementa"),
             "{{AUTORIA}}": form_data.get("autoria"),
             "{{DATA_PROTOCOLO}}": datetime.strptime(form_data.get("data_protocolo"), '%Y-%m-%d').strftime('%d/%m/%Y'),
@@ -278,6 +278,95 @@ def gerar():
 @app.route('/download/<filename>')
 def download(filename):
     return send_from_directory(app.config['GENERATED_FOLDER'], filename, as_attachment=True)
+
+@app.route('/adicionar_membro', methods=['POST'])
+def adicionar_membro():
+    try:
+        nome = request.form['nome']
+        cargo = request.form['cargo']
+        comissao_id = request.form['comissao_id']
+        
+        db = get_db()
+        db.execute('INSERT INTO membros (nome, cargo, comissao_id) VALUES (?, ?, ?)',
+                   (nome, cargo, comissao_id))
+        db.commit()
+        db.close()
+        flash(f'Membro "{nome}" adicionado com sucesso!')
+    except Exception as e:
+        flash(f'Erro ao adicionar membro: {e}')
+    return redirect(url_for('gerenciar'))
+
+@app.route('/deletar_membro', methods=['POST'])
+def deletar_membro():
+    try:
+        membro_id = request.form['membro_id']
+        
+        db = get_db()
+        # Pega o nome para a mensagem flash ANTES de deletar
+        nome_membro = db.execute('SELECT nome FROM membros WHERE id = ?', (membro_id,)).fetchone()['nome']
+        
+        db.execute('DELETE FROM membros WHERE id = ?', (membro_id,))
+        db.commit()
+        db.close()
+        flash(f'Membro "{nome_membro}" removido com sucesso!')
+    except Exception as e:
+        flash(f'Erro ao remover membro: {e}')
+    return redirect(url_for('gerenciar'))
+
+@app.route('/editar_membro/<int:membro_id>', methods=['GET'])
+def editar_membro(membro_id):
+    """Exibe o formulário de edição para um membro específico."""
+    db = get_db()
+    membro = db.execute('SELECT * FROM membros WHERE id = ?', (membro_id,)).fetchone()
+    comissoes = db.execute('SELECT * FROM comissoes ORDER BY nome').fetchall()
+    db.close()
+    
+    if membro is None:
+        flash('Membro não encontrado.')
+        return redirect(url_for('gerenciar'))
+        
+    return render_template('editar_membro.html', membro=membro, comissoes=comissoes)
+
+@app.route('/atualizar_membro', methods=['POST'])
+def atualizar_membro():
+    """Processa a atualização dos dados do membro."""
+    try:
+        membro_id = request.form['membro_id']
+        nome = request.form['nome']
+        cargo = request.form['cargo']
+        comissao_id = request.form['comissao_id']
+        
+        db = get_db()
+        db.execute('UPDATE membros SET nome = ?, cargo = ?, comissao_id = ? WHERE id = ?',
+                   (nome, cargo, comissao_id, membro_id))
+        db.commit()
+        db.close()
+        flash(f'Dados do membro "{nome}" atualizados com sucesso!')
+    except Exception as e:
+        flash(f'Erro ao atualizar membro: {e}')
+        
+    return redirect(url_for('gerenciar'))
+
+@app.route('/gerenciar')
+def gerenciar():
+    db = get_db()
+    comissoes = db.execute('SELECT * FROM comissoes ORDER BY nome').fetchall()
+    
+    # Vamos buscar os membros e agrupá-los por comissão
+    membros_por_comissao = {}
+    for comissao in comissoes:
+        membros = db.execute(
+            'SELECT * FROM membros WHERE comissao_id = ? ORDER BY nome', 
+            (comissao['id'],)
+        ).fetchall()
+        membros_por_comissao[comissao['id']] = membros
+    
+    db.close()
+    return render_template(
+        'gerenciar.html', 
+        comissoes=comissoes, 
+        membros_por_comissao=membros_por_comissao
+    )
 
 @app.cli.command('init-db')
 def init_db_command():

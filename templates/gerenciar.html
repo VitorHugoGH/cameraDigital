@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Gerenciar Comissões e Membros</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #f4f4f4;
+      }
+      .container {
+        width: 90%;
+        max-width: 1000px;
+        margin: 20px auto;
+        background: #fff;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+      }
+      h1,
+      h2,
+      h3 {
+        color: #333;
+      }
+      a {
+        color: #007bff;
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      .comissao {
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        padding: 15px;
+        margin-bottom: 20px;
+        background-color: #fafafa;
+      }
+      .comissao h3 {
+        margin-top: 0;
+      }
+      .membro-lista {
+        list-style: none;
+        padding-left: 0;
+      }
+      .membro-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px;
+        border-bottom: 1px solid #eee;
+      }
+      .membro-item:last-child {
+        border-bottom: none;
+      }
+      .membro-info {
+        font-size: 1.1em;
+        flex-grow: 1; /* <-- ADICIONE ESTA LINHA */
+      }
+      .membro-info strong {
+        color: #0056b3;
+      }
+
+      /* --- NOVOS ESTILOS PARA ADICIONAR E DELETAR --- */
+      .flashes {
+        list-style: none;
+        padding-left: 0;
+      }
+      .flashes li {
+        background: #e6f7ff;
+        border: 1px solid #b3e0ff;
+        padding: 10px;
+        border-radius: 4px;
+        margin-bottom: 15px;
+      }
+
+      .membro-item form input[type="submit"] {
+        background-color: #dc3545;
+        color: white;
+        border: none;
+        padding: 5px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.9em;
+      }
+
+      .form-adicionar {
+        margin-top: 20px;
+        padding-top: 15px;
+        border-top: 1px dashed #ccc;
+      }
+      .form-adicionar .form-group {
+        margin-bottom: 10px;
+      }
+      .form-adicionar label {
+        display: inline-block;
+        width: 80px;
+        font-weight: bold;
+      }
+      .form-adicionar input[type="text"],
+      .form-adicionar select {
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        width: 250px;
+      }
+      .form-adicionar input[type="submit"] {
+        background-color: #28a745;
+        color: white;
+        padding: 8px 12px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-left: 84px; /* Alinha com os campos */
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      {% with messages = get_flashed_messages() %} {% if messages %}
+      <ul class="flashes">
+        {% for message in messages %}
+        <li>{{ message }}</li>
+        {% endfor %}
+      </ul>
+      {% endif %} {% endwith %}
+
+      <h1>Gerenciamento de Comissões e Membros</h1>
+      <a href="{{ url_for('index') }}">&larr; Voltar para a Página Inicial</a>
+      <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0" />
+
+      <h2>Comissões e Membros Atuais</h2>
+
+      {% for comissao in comissoes %}
+      <div class="comissao">
+        <h3>{{ comissao['nome'] }} ({{ comissao['sigla'] }})</h3>
+        <ul class="membro-lista">
+          {% for membro in membros_por_comissao[comissao['id']] %}
+          <li class="membro-item">
+                       
+            <span class="membro-info">
+                    <strong>{{ membro['nome'] }}</strong> - ({{ membro['cargo']
+              }})    
+            </span>
+
+                   
+            <div style="display: inline-block; flex-shrink: 0">
+                         
+              <a
+                href="{{ url_for('editar_membro', membro_id=membro.id) }}"
+                style="
+                  margin-right: 10px;
+                  font-weight: bold;
+                  display: inline-block;
+                  vertical-align: middle;
+                "
+              >
+                        Editar      
+              </a>
+
+                         
+              <form
+                action="{{ url_for('deletar_membro') }}"
+                method="POST"
+                style="display: inline; vertical-align: middle"
+                onsubmit="return confirm('Tem certeza que deseja remover este membro?');"
+              >
+                       
+                <input
+                  type="hidden"
+                  name="membro_id"
+                  value="{{ membro['id'] }}"
+                />
+                        <input type="submit" value="Deletar" />      
+              </form>
+                 
+            </div>
+               
+          </li>
+          {% else %}
+          <li class="membro-item">Nenhum membro cadastrado nesta comissão.</li>
+          {% endfor %}
+        </ul>
+
+        <form
+          action="{{ url_for('adicionar_membro') }}"
+          method="POST"
+          class="form-adicionar"
+        >
+          <h4>Adicionar Novo Membro</h4>
+          <input
+            type="hidden"
+            name="comissao_id"
+            value="{{ comissao['id'] }}"
+          />
+          <div class="form-group">
+            <label for="nome-{{ comissao['id'] }}">Nome:</label>
+            <input
+              type="text"
+              name="nome"
+              id="nome-{{ comissao['id'] }}"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="cargo-{{ comissao['id'] }}">Cargo:</label>
+            <select name="cargo" id="cargo-{{ comissao['id'] }}" required>
+              <option value="Presidente">Presidente</option>
+              <option value="Vice-Presidente">Vice-Presidente</option>
+              <option value="Membro">Membro</option>
+            </select>
+          </div>
+          <input type="submit" value="Adicionar Membro" />
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+  </body>
+</html>
