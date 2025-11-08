@@ -15,7 +15,7 @@ locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
 
 # --- CONFIGURAÇÃO ---
 app = Flask(__name__)
-app.secret_key = 'super_secret_key' # Necessário para mensagens flash
+app.secret_key = os.environ.get('SECRET_KEY', 'chave-local-para-nao-quebrar-o-teste')
 UPLOAD_FOLDER = 'uploads'
 GENERATED_FOLDER = 'generated'
 TEMPLATE_FOLDER = 'templates_docx'
