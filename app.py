@@ -11,15 +11,17 @@ from flask import Flask, render_template, request, redirect, url_for, send_from_
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from flask_bcrypt import Bcrypt
 import locale
+# Esta linha descobre o caminho absoluto para o diretório onde app.py está
+basedir = os.path.abspath(os.path.dirname(__file__))
 locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
 
 # --- CONFIGURAÇÃO ---
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'chave-local-para-nao-quebrar-o-teste')
-UPLOAD_FOLDER = 'uploads'
-GENERATED_FOLDER = 'generated'
-TEMPLATE_FOLDER = 'templates_docx'
-DATABASE = 'database.db'
+UPLOAD_FOLDER = os.path.join(basedir, 'uploads')
+GENERATED_FOLDER = os.path.join(basedir, 'generated')
+TEMPLATE_FOLDER = os.path.join(basedir, 'templates_docx')
+DATABASE = os.path.join(basedir, 'database.db')
 bcrypt = Bcrypt(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login' 
