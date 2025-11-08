@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+  <head>
+    <meta charset="UTF-8" />
+    <title>LegisTech - Login</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #f4f4f4;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+      }
+      .login-container {
+        width: 100%;
+        max-width: 400px;
+        background: #fff;
+        padding: 2em;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      }
+      h1 {
+        text-align: center;
+        color: #333;
+      }
+      .form-group {
+        margin-bottom: 1.5em;
+      }
+      .form-group label {
+        display: block;
+        margin-bottom: 0.5em;
+        font-weight: bold;
+      }
+      .form-group input[type="text"],
+      .form-group input[type="password"] {
+        width: 95%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+      }
+      .btn-login {
+        width: 100%;
+        padding: 12px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 1.1em;
+      }
+      .btn-login:hover {
+        background-color: #0056b3;
+      }
+
+      /* Estilos das mensagens flash */
+      .flashes {
+        list-style: none;
+        padding-left: 0;
+      }
+      .flashes li {
+        text-align: center;
+        padding: 10px;
+        border-radius: 4px;
+        margin-bottom: 15px;
+        border: 1px solid #f5c6cb;
+        background-color: #f8d7da; /* Vermelho para erro */
+        color: #721c24;
+      }
+      /* Categoria 'success' (para login bem-sucedido) */
+      .flashes li.success {
+        background-color: #d4edda;
+        border-color: #c3e6cb;
+        color: #155724;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="login-container">
+      <h1>LegisTech</h1>
+
+      {% with messages = get_flashed_messages(with_categories=True) %} {% if
+      messages %}
+      <ul class="flashes">
+        {% for category, message in messages %}
+        <li class="{{ category }}">{{ message }}</li>
+        {% endfor %}
+      </ul>
+      {% endif %} {% endwith %}
+
+      <form method="POST" action="{{ url_for('login') }}">
+        <div class="form-group">
+          <label for="username">Usuário:</label>
+          <input type="text" id="username" name="username" required />
+        </div>
+        <div class="form-group">
+          <label for="password">Senha:</label>
+          <input type="password" id="password" name="password" required />
+        </div>
+        <button type="submit" class="btn-login">Entrar</button>
+      </form>
+    </div>
+  </body>
+</html>

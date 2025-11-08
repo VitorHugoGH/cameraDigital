@@ -5,8 +5,11 @@ import re
 import fitz
 import docx
 import sqlite3
+import click
 from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory, flash
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from flask_bcrypt import Bcrypt
 import locale
 locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
 
@@ -17,6 +20,11 @@ UPLOAD_FOLDER = 'uploads'
 GENERATED_FOLDER = 'generated'
 TEMPLATE_FOLDER = 'templates_docx'
 DATABASE = 'database.db'
+bcrypt = Bcrypt(app)
+login_manager = LoginManager(app)
+login_manager.login_view = 'login' 
+login_manager.login_message = 'Por favor, faça login para acessar esta página.'
+login_manager.login_message_category = 'info'
 app.config.update(
     UPLOAD_FOLDER=UPLOAD_FOLDER,
     GENERATED_FOLDER=GENERATED_FOLDER,
@@ -31,6 +39,16 @@ def get_db():
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
     return conn
+
+@login_manager.user_loader
+def load_user(user_id):
+    """Função obrigatória do Flask-Login para carregar o usuário da sessão."""
+    db = get_db()
+    user_data = db.execute('SELECT * FROM user WHERE id = ?', (user_id,)).fetchone()
+    db.close()
+    if user_data:
+        return User(user_data['id'], user_data['username'], user_data['password_hash'])
+    return None
 
 # --- LÓGICA DE SUBSTITUIÇÃO DE TEXTO (para manter a formatação) ---
 def replace_text_in_paragraph(paragraph, key, value):
@@ -70,6 +88,19 @@ def replace_text_in_paragraph(paragraph, key, value):
     if found:
         for i in range(len(paragraph.runs)):
             paragraph.runs[i].text = run_texts[i]
+
+# --- MODELO DE USUÁRIO PARA O LOGIN ---
+class User(UserMixin):
+    # UserMixin é uma classe especial do Flask-Login
+    # que já nos dá funções como is_authenticated, etc.
+    def __init__(self, id, username, password_hash):
+        self.id = id
+        self.username = username
+        self.password_hash = password_hash
+
+    # Esta função é necessária para o Flask-Login
+    def get_id(self):
+        return str(self.id)
 
 # --- LÓGICA PRINCIPAL ---
 def processar_pdf(pdf_path):
@@ -221,12 +252,14 @@ def gerar_docx_final(form_data, pdf_filename):
 
 # --- ROTAS ---
 @app.route('/', methods=['GET'])
+@login_required
 def index():
     db = get_db()
     historico = db.execute('SELECT * FROM pareceres ORDER BY id DESC').fetchall()
     return render_template('index.html', historico=historico)
 
 @app.route('/upload', methods=['POST'])
+@login_required
 def upload():
     file = request.files.get('file')
     if not file or file.filename == '':
@@ -246,6 +279,7 @@ def upload():
     return render_template('revisar.html', dados=dados_pdf, comissoes=comissoes, membros=membros, filename=filename)
 
 @app.route('/gerar', methods=['POST'])
+@login_required
 def gerar():
     # --- NOVO BLOCO DE VERIFICAÇÃO ---
     # Verifica PRIMEIRO se alguma comissão foi selecionada
@@ -276,10 +310,12 @@ def gerar():
 
 # Rotas de download e init-db continuam as mesmas da versão anterior
 @app.route('/download/<filename>')
+@login_required
 def download(filename):
     return send_from_directory(app.config['GENERATED_FOLDER'], filename, as_attachment=True)
 
 @app.route('/adicionar_membro', methods=['POST'])
+@login_required
 def adicionar_membro():
     try:
         nome = request.form['nome']
@@ -297,6 +333,7 @@ def adicionar_membro():
     return redirect(url_for('gerenciar'))
 
 @app.route('/deletar_membro', methods=['POST'])
+@login_required
 def deletar_membro():
     try:
         membro_id = request.form['membro_id']
@@ -314,6 +351,7 @@ def deletar_membro():
     return redirect(url_for('gerenciar'))
 
 @app.route('/editar_membro/<int:membro_id>', methods=['GET'])
+@login_required
 def editar_membro(membro_id):
     """Exibe o formulário de edição para um membro específico."""
     db = get_db()
@@ -328,6 +366,7 @@ def editar_membro(membro_id):
     return render_template('editar_membro.html', membro=membro, comissoes=comissoes)
 
 @app.route('/atualizar_membro', methods=['POST'])
+@login_required
 def atualizar_membro():
     """Processa a atualização dos dados do membro."""
     try:
@@ -348,6 +387,7 @@ def atualizar_membro():
     return redirect(url_for('gerenciar'))
 
 @app.route('/gerenciar')
+@login_required
 def gerenciar():
     db = get_db()
     comissoes = db.execute('SELECT * FROM comissoes ORDER BY nome').fetchall()
@@ -368,6 +408,26 @@ def gerenciar():
         membros_por_comissao=membros_por_comissao
     )
 
+@app.cli.command('create-admin')
+@click.argument('username')
+@click.argument('password')
+def create_admin_command(username, password):
+    """Cria um novo usuário administrador."""
+    db = get_db()
+    try:
+        # Criptografa a senha
+        hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+        db.execute('INSERT INTO user (username, password_hash) VALUES (?, ?)',
+                   (username, hashed_password))
+        db.commit()
+        print(f"Administrador '{username}' criado com sucesso.")
+    except sqlite3.IntegrityError:
+        print(f"Erro: Usuário '{username}' já existe.")
+    except Exception as e:
+        print(f"Erro ao criar administrador: {e}")
+    finally:
+        db.close()
+
 @app.cli.command('init-db')
 def init_db_command():
     """Limpa os dados existentes e cria novas tabelas com dados padrão."""
@@ -375,12 +435,14 @@ def init_db_command():
     cursor = db.cursor()
     
     # Limpar tabelas existentes
+    print("Limpando tabelas antigas (se existiam)...")
     cursor.execute("DROP TABLE IF EXISTS pareceres;")
     cursor.execute("DROP TABLE IF EXISTS membros;")
     cursor.execute("DROP TABLE IF EXISTS comissoes;")
-    print("Tabelas antigas (se existiam) removidas.")
+    cursor.execute("DROP TABLE IF EXISTS user;") 
 
     # Criar tabelas
+    print("Criando novas tabelas...")
     cursor.execute('''
     CREATE TABLE comissoes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -406,9 +468,16 @@ def init_db_command():
         data_geracao TEXT NOT NULL
     );
     ''')
-    print("Novas tabelas (comissoes, membros, pareceres) criadas.")
+    cursor.execute('''
+    CREATE TABLE user (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL
+    );
+    ''')
+    print("Tabelas (comissoes, membros, pareceres, user) criadas.")
 
-    # Inserir Comissões Padrão (COM OS NOMES CORRIGIDOS)
+    # Inserir Comissões Padrão
     comissoes = [
         ('Comissão de Justiça e Redação', 'CJR'),
         ('Comissão de Finanças e Orçamento', 'CFO'),
@@ -416,7 +485,7 @@ def init_db_command():
         ('Comissão de Educação, Saúde e Assistência Social', 'CESAS')
     ]
     cursor.executemany('INSERT INTO comissoes (nome, sigla) VALUES (?, ?)', comissoes)
-    print("Comissões padrão (corrigidas) inseridas.")
+    print("Comissões padrão inseridas.")
     db.commit()
 
     # Buscar IDs das comissões
@@ -430,32 +499,57 @@ def init_db_command():
         db.close()
         return
 
-    # Inserir Membros Padrão (COM OS CARGOS CORRIGIDOS)
-    # !!! ALTERE ESTES NOMES PARA OS VEREADORES REAIS !!!
+    # Inserir Membros Padrão (Popule com seus dados reais depois)
     membros = [
-        # CJR
         (cjr_id, 'Vereador A (CJR)', 'Presidente'),
         (cjr_id, 'Vereador B (CJR)', 'Vice-Presidente'),
         (cjr_id, 'Vereador C (CJR)', 'Membro'),
-        
-        # CFO
         (cfo_id, 'Vereador D (CFO)', 'Presidente'),
         (cfo_id, 'Vereador E (CFO)', 'Vice-Presidente'),
         (cfo_id, 'Vereador F (CFO)', 'Membro'),
-        
-        # COSPAP
         (cospap_id, 'Vereador G (COSPAP)', 'Presidente'),
         (cospap_id, 'Vereador H (COSPAP)', 'Vice-Presidente'),
         (cospap_id, 'Vereador I (COSPAP)', 'Membro'),
-        
-        # CESAS
         (cesas_id, 'Vereador J (CESAS)', 'Presidente'),
         (cesas_id, 'Vereador K (CESAS)', 'Vice-Presidente'),
         (cesas_id, 'Vereador L (CESAS)', 'Membro')
     ]
     cursor.executemany('INSERT INTO membros (comissao_id, nome, cargo) VALUES (?, ?, ?)', membros)
-    print("Membros padrão (corrigidos) inseridos.")
+    print("Membros padrão inseridos.")
     
     db.commit()
     db.close()
     print("Banco de dados inicializado com sucesso.")
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    # Se o usuário já estiver logado, redireciona para a home
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+        
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        
+        db = get_db()
+        user_data = db.execute('SELECT * FROM user WHERE username = ?', (username,)).fetchone()
+        db.close()
+        
+        # Verifica se o usuário existe e se a senha está correta
+        if user_data:
+            user = User(user_data['id'], user_data['username'], user_data['password_hash'])
+            if bcrypt.check_password_hash(user.password_hash, password):
+                login_user(user) # <-- A "mágica" do Flask-Login acontece aqui
+                flash('Login realizado com sucesso!', 'success')
+                return redirect(url_for('index'))
+                
+        flash('Usuário ou senha inválidos.', 'danger')
+        
+    return render_template('login.html')
+
+@app.route('/logout')
+@login_required # Só quem está logado pode deslogar
+def logout():
+    logout_user()
+    flash('Você foi desconectado.', 'success')
+    return redirect(url_for('login'))
