@@ -1,90 +1,206 @@
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
-    <meta charset="UTF-8">
-    <title>Revisar Dados e Gerar Pareceres</title>
-    <style> 
-        body { font-family: sans-serif; margin: 2em; background-color: #f4f4f4; }
-        .container { max-width: 900px; margin: auto; background: white; padding: 2em; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-        h1, h2, h3 { color: #333; }
-        form div { margin-bottom: 1em; }
-        label { display: block; margin-bottom: 0.5em; font-weight: bold; }
-        input[type="text"], input[type="date"], select, textarea { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
-        input[type="submit"] { background-color: #28a745; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 1em; }
-        .comissao-box { border: 1px solid #ddd; padding: 1em; margin-top: 1em; border-radius: 4px; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>2ª Etapa: Revisão e Geração</h1>
-        <p>Confira os dados extraídos do arquivo <strong>{{ filename }}</strong>. Corrija se necessário e configure os pareceres.</p>
-        
-        <form action="/gerar" method="post">
-            <input type="hidden" name="pdf_filename" value="{{ filename }}">
+{% extends "base.html" %} {% block title %}LegisTech - 2ª Etapa: Revisão{%
+endblock %} {% block content %}
+<form action="/gerar" method="POST">
+  <input type="hidden" name="pdf_filename" value="{{ filename }}" />
 
-            <h3>Dados Extraídos (Editáveis)</h3>
-            <div>
-                <label for="tipo_projeto">Tipo do Projeto:</label>
-                <input type="text" name="tipo_projeto" value="{{ dados.TIPO_PROJETO or '' }}">
-            </div>
-            <div>
-                <label for="numero_projeto">Número do Projeto:</label>
-                <input type="text" name="numero_projeto" value="{{ dados.NUMERO_PROJETO or '' }}">
-            </div>
-            <div>
-                <label for="data_projeto">Data do Projeto:</label>
-                <input type="text" name="data_projeto" value="{{ dados.DATA_PROJETO or '' }}">
-            </div>
-            <div>
-                <label for="ementa">Ementa:</label>
-                <textarea name="ementa" rows="4">{{ dados.EMENTA or '' }}</textarea>
-            </div>
+  <h2>2ª Etapa: Revisão e Geração</h2>
+  <p>
+    Confira os dados extraídos do arquivo <strong>{{ filename }}</strong>.
+    Corrija se necessário e configure os pareceres.
+  </p>
 
-            <h3>Dados da Tramitação e Comissões</h3>
-            <div>
-                <label for="autoria">Autoria do Projeto:</label>
-                <input type="text" name="autoria" value="Chefe do Executivo" required>
-            </div>
-            <div>
-                <label for="data_protocolo">Data do Protocolo:</label>
-                <input type="date" name="data_protocolo" required>
-            </div>
-            <div>
-                <input type="checkbox" name="incluir_apresentacao" id="incluir_apresentacao">
-                <label for="incluir_apresentacao">Incluir Data de Apresentação em Sessão?</label>
-                <input type="date" name="data_apresentacao" id="data_apresentacao">
-            </div>
-            <div>
-                <input type="checkbox" name="regime_urgencia" id="regime_urgencia">
-                <label for="regime_urgencia">Tramita em Regime de Urgência?</label>
-            </div>
-            <div>
-                <label for="data_parecer">Data de Emissão dos Pareceres:</label>
-                <input type="date" name="data_parecer" required>
-            </div>
-
-            <h3>Seleção e Configuração das Comissões</h3>
-            {% for comissao in comissoes %}
-            <div class="comissao-box">
-                <input type="checkbox" name="comissao_selecionada" value="{{ comissao.sigla }}" id="com_{{ comissao.sigla }}">
-                <label for="com_{{ comissao.sigla }}">{{ comissao.nome }}</label>
-                <div>
-                    <label for="num_parecer_{{ comissao.sigla }}">Nº do Parecer:</label>
-                    <input type="text" name="num_parecer_{{ comissao.sigla }}">
-                </div>
-                <div>
-                    <label for="relator_{{ comissao.sigla }}">Relator:</label>
-                    <select name="relator_{{ comissao.sigla }}">
-                        {% for membro in membros if membro.comissao_id == comissao.id %}
-                        <option value="{{ membro.id }}">{{ membro.nome }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
-            {% endfor %}
-
-            <input type="submit" value="Gerar Pareceres Finais">
-        </form>
+  <fieldset style="border-radius: 5px; border: 1px solid #ddd; padding: 15px">
+    <legend style="font-size: 1.2em; font-weight: bold; padding: 0 10px">
+      Dados Extraídos (Editáveis)
+    </legend>
+    <div style="margin-bottom: 10px">
+      <label
+        for="tipo_projeto"
+        style="display: block; font-weight: bold; margin-bottom: 5px"
+        >Tipo do Projeto:</label
+      >
+      <input
+        type="text"
+        id="tipo_projeto"
+        name="tipo_projeto"
+        value="{{ dados.TIPO_PROJETO|default('', True) }}"
+        style="width: 98%; padding: 8px"
+      />
     </div>
-</body>
-</html>
+    <div style="margin-bottom: 10px">
+      <label
+        for="numero_projeto"
+        style="display: block; font-weight: bold; margin-bottom: 5px"
+        >Número do Projeto:</label
+      >
+      <input
+        type="text"
+        id="numero_projeto"
+        name="numero_projeto"
+        value="{{ dados.NUMERO_PROJETO|default('', True) }}"
+        style="width: 98%; padding: 8px"
+      />
+    </div>
+    <div style="margin-bottom: 10px">
+      <label
+        for="data_projeto"
+        style="display: block; font-weight: bold; margin-bottom: 5px"
+        >Data do Projeto:</label
+      >
+      <input
+        type="text"
+        id="data_projeto"
+        name="data_projeto"
+        value="{{ dados.DATA_PROJETO|default('', True) }}"
+        style="width: 98%; padding: 8px"
+      />
+    </div>
+    <div>
+      <label
+        for="ementa"
+        style="display: block; font-weight: bold; margin-bottom: 5px"
+        >Ementa:</label
+      >
+      <textarea
+        id="ementa"
+        name="ementa"
+        rows="4"
+        style="width: 98%; padding: 8px"
+      >
+{{ dados.EMENTA|default('', True) }}</textarea
+      >
+    </div>
+  </fieldset>
+
+  <h3 style="margin-top: 25px">Dados da Tramitação e Comissões</h3>
+  <fieldset style="border-radius: 5px; border: 1px solid #ddd; padding: 15px">
+    <div style="margin-bottom: 10px">
+      <label for="autoria" style="font-weight: bold">Autoria do Projeto:</label
+      ><br />
+      <input
+        type="text"
+        id="autoria"
+        name="autoria"
+        value="Chefe do Executivo"
+        style="width: 98%; padding: 8px"
+      />
+    </div>
+    <div style="margin-bottom: 10px">
+      <label for="data_protocolo" style="font-weight: bold"
+        >Data do Protocolo:</label
+      ><br />
+      <input
+        type="date"
+        id="data_protocolo"
+        name="data_protocolo"
+        required
+        style="padding: 8px"
+      />
+    </div>
+    <div style="margin-bottom: 10px">
+      <input
+        type="checkbox"
+        id="incluir_apresentacao"
+        name="incluir_apresentacao"
+        value="true"
+      />
+      <label for="incluir_apresentacao"
+        >Incluir Data de Apresentação em Sessão?</label
+      ><br />
+      <input
+        type="date"
+        id="data_apresentacao"
+        name="data_apresentacao"
+        style="padding: 8px; margin-left: 20px"
+      />
+    </div>
+    <div style="margin-bottom: 10px">
+      <input
+        type="checkbox"
+        id="regime_urgencia"
+        name="regime_urgencia"
+        value="true"
+      />
+      <label for="regime_urgencia">Tramita em Regime de Urgência?</label>
+    </div>
+    <div style="margin-bottom: 10px">
+      <label for="data_parecer" style="font-weight: bold"
+        >Data de Emissão dos Pareceres:</label
+      ><br />
+      <input
+        type="date"
+        id="data_parecer"
+        name="data_parecer"
+        required
+        style="padding: 8px"
+      />
+    </div>
+  </fieldset>
+
+  <h3 style="margin-top: 25px">Seleção e Configuração das Comissões</h3>
+  {% for comissao in comissoes %}
+  <fieldset
+    style="
+      border-radius: 5px;
+      border: 1px solid #ddd;
+      padding: 15px;
+      margin-bottom: 15px;
+    "
+  >
+    <input
+      type="checkbox"
+      id="comissao_{{ comissao.sigla }}"
+      name="comissao_selecionada"
+      value="{{ comissao.sigla }}"
+      style="transform: scale(1.2)"
+    />
+    <label
+      for="comissao_{{ comissao.sigla }}"
+      style="font-size: 1.2em; font-weight: bold"
+      >{{ comissao.nome }}</label
+    >
+
+    <div style="margin-top: 10px; padding-left: 20px">
+      <label for="num_parecer_{{ comissao.sigla }}" style="font-weight: bold"
+        >Nº do Parecer:</label
+      ><br />
+      <input
+        type="text"
+        id="num_parecer_{{ comissao.sigla }}"
+        name="num_parecer_{{ comissao.sigla }}"
+        style="width: 200px; padding: 8px"
+      />
+    </div>
+    <div style="margin-top: 10px; padding-left: 20px">
+      <label for="relator_{{ comissao.sigla }}" style="font-weight: bold"
+        >Relator:</label
+      ><br />
+      <select
+        id="relator_{{ comissao.sigla }}"
+        name="relator_{{ comissao.sigla }}"
+        style="width: 300px; padding: 8px"
+      >
+        {% for membro in membros if membro.comissao_id == comissao.id %}
+        <option value="{{ membro.id }}">{{ membro.nome }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </fieldset>
+  {% endfor %}
+
+  <input
+    type="submit"
+    value="Gerar Pareceres Finais"
+    style="
+      padding: 15px 25px;
+      font-size: 1.2em;
+      background-color: #28a745;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-top: 20px;
+    "
+  />
+</form>
+{% endblock %}

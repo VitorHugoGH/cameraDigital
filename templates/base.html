@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+  <head>
+    <meta charset="UTF-8" />
+    <title>{% block title %}LegisTech{% endblock %}</title>
+
+    {% block head %} {% endblock %}
+
+    <style>
+      <style>
+      /* Estilos base (do seu colega + os nossos) */
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #f4f4f4;
+      }
+      .container {
+        max-width: 900px;
+        margin: 20px auto;
+        background: white;
+        padding: 2em;
+        border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+      h1,
+      h2,
+      h3 {
+        color: #333;
+      }
+
+      /* Estilos dos botões de acessibilidade */
+      #controles-acessibilidade {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 1000;
+        padding: 10px;
+        background-color: #f0f0f0;
+        border-radius: 5px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      }
+      #controles-acessibilidade button {
+        padding: 5px 10px;
+        margin-left: 5px;
+        cursor: pointer;
+      }
+
+      /* Estilos das mensagens flash */
+      .flashes {
+        list-style: none;
+        padding-left: 0;
+      }
+      .flashes li {
+        background: #e6f7ff;
+        border: 1px solid #b3e0ff;
+        padding: 10px;
+        border-radius: 4px;
+        margin-bottom: 15px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="controles-acessibilidade">
+      <button onclick="mudarTamanhoFonte(-1)">Diminuir Fonte (A-)</button>
+      <button onclick="mudarTamanhoFonte(1)">Aumentar Fonte (A+)</button>
+    </div>
+
+    <div class="container">
+      {% with messages = get_flashed_messages() %} {% if messages %}
+      <ul class="flashes">
+        {% for message in messages %}
+        <li>{{ message }}</li>
+        {% endfor %}
+      </ul>
+      {% endif %} {% endwith %} {% block content %}{% endblock %}
+    </div>
+
+    <script>
+      const TAMANHO_BASE = 16;
+      const TAMANHO_MINIMO = 12;
+      const TAMANHO_MAXIMO = 32;
+      const STORAGE_KEY = "fontSizeAcessibilidade";
+
+      // Aplicamos a fonte no <html>, que é o elemento raiz
+      const elementoRaiz = document.documentElement;
+
+      // Tentamos ler do localStorage, senão usamos o tamanho base
+      let tamanhoAtual =
+        parseInt(localStorage.getItem(STORAGE_KEY)) || TAMANHO_BASE;
+
+      function mudarTamanhoFonte(ajuste) {
+        let novoTamanho = tamanhoAtual + ajuste;
+
+        // Limita o tamanho mínimo e máximo
+        if (novoTamanho >= TAMANHO_MINIMO && novoTamanho <= TAMANHO_MAXIMO) {
+          tamanhoAtual = novoTamanho;
+          localStorage.setItem(STORAGE_KEY, tamanhoAtual);
+          aplicarTamanhoFonte();
+        }
+      }
+
+      function aplicarTamanhoFonte() {
+        elementoRaiz.style.fontSize = tamanhoAtual + "px";
+      }
+
+      // Aplica o tamanho da fonte assim que a página carregar
+      document.addEventListener("DOMContentLoaded", () => {
+        aplicarTamanhoFonte();
+      });
+    </script>
+  </body>
+</html>
