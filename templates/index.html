@@ -18,7 +18,36 @@ block content %}
   <input type="submit" value="Enviar e Extrair Dados" />
 </form>
 
-<h2>Histórico de Documentos Gerados</h2>
+<div
+  style="
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 2em;
+  "
+>
+  <h2>Histórico de Documentos Gerados</h2>
+
+  <form
+    action="{{ url_for('limpar_historico') }}"
+    method="POST"
+    onsubmit="return confirm('Tem certeza que deseja apagar TODO o histórico? Esta ação é irreversível.');"
+  >
+    <input
+      type="submit"
+      value="Limpar Histórico"
+      style="
+        background-color: #dc3545;
+        color: white;
+        border: none;
+        padding: 8px;
+        cursor: pointer;
+        border-radius: 4px;
+      "
+    />
+  </form>
+</div>
+
 <table
   class="history-table"
   style="width: 100%; border-collapse: collapse; margin-top: 1em"
@@ -29,6 +58,7 @@ block content %}
       <th style="border: 1px solid #ddd; padding: 8px">Nº do Projeto</th>
       <th style="border: 1px solid #ddd; padding: 8px">Data de Geração</th>
       <th style="border: 1px solid #ddd; padding: 8px">Download do Parecer</th>
+      <th style="border: 1px solid #ddd; padding: 8px">Ações</th>
     </tr>
   </thead>
   <tbody>
@@ -46,8 +76,32 @@ block content %}
           {{ item.docx_name }}
         </a>
       </td>
+
+      <td style="border: 1px solid #ddd; padding: 8px; text-align: center">
+        <form
+          action="{{ url_for('deletar_historico', item_id=item.id) }}"
+          method="POST"
+          onsubmit="return confirm('Deletar este item?');"
+          style="margin: 0"
+        >
+          <input type="hidden" name="item_id" value="{{ item.id }}" />
+          <input
+            type="submit"
+            value="Deletar"
+            style="
+              background-color: #dc3545;
+              color: white;
+              border: none;
+              padding: 5px 8px;
+              cursor: pointer;
+              border-radius: 4px;
+            "
+          />
+        </form>
+      </td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
+
 {% endblock %}

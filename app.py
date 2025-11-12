@@ -180,31 +180,57 @@ def gerar_docx_final(form_data, pdf_filename):
     db = get_db()
     comissoes_selecionadas = form_data.getlist('comissao_selecionada')
 
+    ### --- INÍCIO DA LÓGICA DE NOVOS NOMES --- ###
+    tipo_projeto = form_data.get("tipo_projeto", "").upper()
+    autoria = form_data.get("autoria", "").upper()
+    numero_projeto = form_data.get("numero_projeto", "00-0000")
+
+    prefixo = "DOC" # Um prefixo padrão
+
+    if "PROJETO DE LEI ORDINARIA" in tipo_projeto:
+        prefixo = "PLOC" if "CÂMARA" in autoria else "PLOE"
+    elif "PROJETO DE LEI COMPLEMENTAR" in tipo_projeto:
+        prefixo = "PLCC" if "CÂMARA" in autoria else "PLCE"
+    elif "PROJETO DE RESOLUÇÃO" in tipo_projeto:
+        prefixo = "PRES"
+    elif "PROJETO DE DECRETO LEGISLATIVO" in tipo_projeto:
+        prefixo = "PDLC"
+    elif "PROPOSTA DE EMENDA" in tipo_projeto:
+        prefixo = "PELO"
+
+    # Formata o número (ex: "045/2025" -> "45_2025")
+    # Removemos o zero à esquerda para ficar "50_2025" e não "050_2025"
+    numero_sem_zero = numero_projeto.split('/')[0].lstrip('0')
+    ano = numero_projeto.split('/')[-1]
+    numero_formatado = f"{numero_sem_zero}_{ano}"
+    ### --- FIM DA LÓGICA DE NOVOS NOMES --- ###
+
     for sigla in comissoes_selecionadas:
         template_path = os.path.join(app.config['TEMPLATE_FOLDER'], f"template_{sigla.lower()}.docx")
-        
+
         if not os.path.exists(template_path): 
             print(f"AVISO: Template não encontrado para {sigla} em {template_path}. Pulando...")
-            continue # Pula para a próxima comissão em vez de quebrar
+            continue
 
         doc = docx.Document(template_path)
         comissao = db.execute('SELECT * FROM comissoes WHERE sigla = ?', (sigla,)).fetchone()
         membros = db.execute('SELECT * FROM membros WHERE comissao_id = ?', (comissao['id'],)).fetchall()
-        
+
         relator_id = form_data.get(f'relator_{sigla}')
         if not relator_id:
             print(f"AVISO: Relator não selecionado para {sigla}. Pulando...")
-            continue # Pula para a próxima comissão
+            continue 
 
         relator = db.execute('SELECT * FROM membros WHERE id = ?', (relator_id,)).fetchone()
-        
+
         if not relator:
             print(f"AVISO: Relator ID {relator_id} não encontrado no DB para {sigla}. Pulando...")
-            continue # Pula para a próxima comissão
+            continue
 
         signatarios = [m for m in membros if m['id'] != relator['id']]
         data_parecer = datetime.strptime(form_data.get('data_parecer'), '%Y-%m-%d')
 
+        # (O seu dicionário 'contexto' permanece exatamente o mesmo)
         contexto = {
             "{{TIPO_PROJETO}}": form_data.get("tipo_projeto"),
             "{{NUMERO_PROJETO}}": form_data.get("numero_projeto"),
@@ -219,8 +245,6 @@ def gerar_docx_final(form_data, pdf_filename):
             "{{NOME_DA_COMISSAO}}": comissao['nome'].upper(),
             "{{NOME_RELATOR}}": relator['nome'].upper(),
             "{{CARGO_RELATOR}}": relator['cargo'],
-            
-            # Lógica segura para signatários, mesmo que só exista 1 ou 2 membros
             "{{NOME_SIGNATARIO_1}}": signatarios[0]['nome'].upper() if len(signatarios) > 0 else "",
             "{{CARGO_SIGNATARIO_1}}": signatarios[0]['cargo'] if len(signatarios) > 0 else "",
             "{{NOME_SIGNATARIO_2}}": signatarios[1]['nome'].upper() if len(signatarios) > 1 else "",
@@ -229,8 +253,8 @@ def gerar_docx_final(form_data, pdf_filename):
 
         for p in doc.paragraphs:
             for key, value in contexto.items():
-                replace_text_in_paragraph(p, key, str(value)) # Usa a nova função robusta
-        
+                replace_text_in_paragraph(p, key, str(value)) 
+
         for table in doc.tables:
              for row in table.rows:
                 for cell in row.cells:
@@ -238,18 +262,18 @@ def gerar_docx_final(form_data, pdf_filename):
                         for key, value in contexto.items():
                             replace_text_in_paragraph(p, key, str(value))
 
-        nome_saida = f"Parecer_{sigla}_{form_data.get('numero_projeto', '00-0000').replace('/', '-')}.docx"
+        ### --- ALTERAÇÃO NO NOME DE SAÍDA --- ###
+        nome_saida = f"{prefixo} {numero_formatado} {sigla}.docx"
         caminho_saida = os.path.join(app.config['GENERATED_FOLDER'], nome_saida)
         doc.save(caminho_saida)
         arquivos_gerados.append(nome_saida)
         print(f"SUCESSO: Arquivo '{nome_saida}' gerado.")
 
-        # Salva no histórico
         db.execute('INSERT INTO pareceres (pdf_name, docx_name, numero_projeto, data_geracao) VALUES (?, ?, ?, ?)',
                    (pdf_filename, nome_saida, form_data.get('numero_projeto'), datetime.now().strftime("%d/%m/%Y %H:%M:%S")))
         db.commit()
-    
-    db.close() # Fecha a conexão com o DB
+
+    db.close() 
     return arquivos_gerados
 
 # --- ROTAS ---
@@ -315,6 +339,54 @@ def gerar():
 @login_required
 def download(filename):
     return send_from_directory(app.config['GENERATED_FOLDER'], filename, as_attachment=True)
+
+@app.route('/deletar_historico/<int:item_id>', methods=['POST'])
+@login_required
+def deletar_historico(item_id):
+    """Deleta um item específico do histórico e seu arquivo."""
+    try:
+        db = get_db()
+        # 1. Pega o nome do arquivo no DB ANTES de deletar
+        item = db.execute('SELECT docx_name FROM pareceres WHERE id = ?', (item_id,)).fetchone()
+
+        if item:
+            # 2. Deleta o arquivo físico da pasta 'generated'
+            arquivo_path = os.path.join(app.config['GENERATED_FOLDER'], item['docx_name'])
+            if os.path.exists(arquivo_path):
+                os.remove(arquivo_path)
+
+        # 3. Deleta o registro do banco de dados
+        db.execute('DELETE FROM pareceres WHERE id = ?', (item_id,))
+        db.commit()
+        db.close()
+        flash('Item do histórico removido com sucesso.', 'success')
+    except Exception as e:
+        flash(f'Erro ao remover item: {e}', 'danger')
+    return redirect(url_for('index'))
+
+@app.route('/limpar_historico', methods=['POST'])
+@login_required
+def limpar_historico():
+    """Deleta TODO o histórico e TODOS os arquivos gerados."""
+    try:
+        db = get_db()
+        # 1. Pega todos os nomes de arquivos no DB
+        items = db.execute('SELECT docx_name FROM pareceres').fetchall()
+
+        # 2. Deleta todos os arquivos físicos da pasta 'generated'
+        for item in items:
+            arquivo_path = os.path.join(app.config['GENERATED_FOLDER'], item['docx_name'])
+            if os.path.exists(arquivo_path):
+                os.remove(arquivo_path)
+
+        # 3. Deleta todos os registros do banco de dados
+        db.execute('DELETE FROM pareceres')
+        db.commit()
+        db.close()
+        flash('Histórico completo removido com sucesso.', 'success')
+    except Exception as e:
+        flash(f'Erro ao limpar histórico: {e}', 'danger')
+    return redirect(url_for('index'))
 
 @app.route('/adicionar_membro', methods=['POST'])
 @login_required
